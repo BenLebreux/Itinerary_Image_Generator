@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Itinerary Graphic Builder</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <!-- html2canvas for exporting PNG -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-dark: #101926;
+      --card-bg: #152232;
+      --cyan-accent: #189ab4;
+      --cyan-text: #2eb5e0;
+      --yellow-note: #e6b800;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0b111a;
+      color: #f0f4f8;
+      padding: 12px;
+    }
+
+    .controls {
+      max-width: 1280px;
+      margin: 0 auto 20px auto;
+      background: #162230;
+      border: 1px solid #2a3d54;
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .controls h2 { font-size: 18px; color: var(--cyan-text); }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .row > * { flex: 1; min-width: 200px; }
+    label { font-size: 12px; color: #9fb3c8; display: block; margin-bottom: 4px; font-weight: 600; }
+    input, select, textarea {
+      width: 100%;
+      background: #0d1520;
+      border: 1px solid #334e68;
+      color: #fff;
+      padding: 10px;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 13px;
+    }
+    textarea { min-height: 155px; font-family: monospace; line-height: 1.4; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+    button {
+      background: var(--cyan-accent);
+      color: #fff;
+      border: none;
+      padding: 13px 16px;
+      border-radius: 6px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 14px;
+      flex: 1;
+      min-width: 150px;
+      touch-action: manipulation;
+    }
+    button:active { transform: scale(0.98); }
+    button.ai-btn { background: #8e44ad; }
+    button.export { background: #2eac68; }
+    button:disabled { opacity: 0.5; cursor: wait; }
+
+    #status {
+      font-size: 13px;
+      color: #f7c948;
+      background: #0d1520;
+      padding: 10px 12px;
+      border-radius: 6px;
+      border-left: 4px solid var(--cyan-text);
+      word-break: break-word;
+      font-family: monospace;
+    }
+
+    .preview-scroll {
+      width: 100%;
+      overflow-x: auto;
+      padding-bottom: 16px;
+    }
+
+    #capture-canvas {
+      width: 1280px;
+      height: 800px;
+      background-color: var(--bg-dark);
+      display: grid;
+      grid-template-columns: 730px 1fr;
+      gap: 28px;
+      padding: 28px 32px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    .left-col {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      height: 100%;
+    }
+    .map-title {
+      text-align: center;
+      font-size: 21px;
+      font-weight: 800;
+      letter-spacing: 0.6px;
+      color: #ffffff;
+      margin-bottom: 18px;
+      text-transform: uppercase;
+    }
+    #map-container {
+      width: 730px;
+      height: 610px;
+      border-radius: 4px;
+      overflow: hidden;
+      background: #131c29;
+      position: relative;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+
+    .right-col {
+      border: 2px solid var(--cyan-accent);
+      border-radius: 14px;
+      background-color: var(--card-bg);
+      padding: 28px 26px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      height: 100%;
+    }
+    .card-header h1 {
+      font-size: 23px;
+      font-weight: 800;
+      color: var(--cyan-text);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .card-header p {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #9fb3c8;
+      margin-bottom: 18px;
+    }
+
+    .stops-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      flex: 1;
+      justify-content: center;
+    }
+    .stop-item {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .badge {
+      width: 78px;
+      height: 44px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 12px;
+      color: #ffffff;
+      flex-shrink: 0;
+      letter-spacing: 0.5px;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    }
+    .stop-details {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .stop-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #ffffff;
+    }
+    .stop-meta {
+      font-size: 12.5px;
+      color: #9fb3c8;
+      font-weight: 500;
+    }
+
+    .transit-note {
+      margin-top: 16px;
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--yellow-note);
+      line-height: 1.4;
+    }
+
+    .custom-pin {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      border: 3px solid #ffffff;
+      font-weight: 800;
+      font-size: 13px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.75);
+      font-family: 'Inter', sans-serif;
+    }
+    .leaflet-control-attribution { display: none !important; }
+  </style>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+</head>
+<body>
+
+  <div class="controls">
+    <h2>Itinerary Graphic Builder (Gemini 3.8 Flash + Keyless Local)</h2>
+    <div class="row">
+      <div>
+        <label>CARTO Map Theme</label>
+        <select id="cartoStyle">
+          <option value="dark_all" selected>CARTO Dark Matter</option>
+          <option value="rastertiles/voyager">CARTO Voyager</option>
+        </select>
+      </div>
+      <div>
+        <label>Route Line Style</label>
+        <select id="routeMode">
+          <option value="driving" selected>Solid Cyan Path</option>
+          <option value="foot">Walking Dots</option>
+        </select>
+      </div>
+      <div>
+        <label>Default City Bias</label>
+        <input type="text" id="cityBias" value="Mexico City, Mexico" />
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Gemini API Key (Saved Locally)</label>
+        <input type="password" id="apiKey" value="" placeholder="Enter Gemini key here" />
+      </div>
+      <div>
+        <label>CARTO API Key (Saved Locally)</label>
+        <input type="text" id="cartoKey" value="" placeholder="Enter CARTO key here" />
+      </div>
+    </div>
+
+    <div>
+      <label>Paste messy notes or structured pipe format below:</label>
+      <textarea id="rawInput">MAP_TITLE: ROUTE MAP (CHAPULTEPEC & POLANCO)
+DAY_HEADER: WEDNESDAY ITINERARY & KEY
+SUB_HEADER: Oct 28, 2026 | Stanza Hotel -> Chapultepec Park
+NOTE: Transit & Planning Note: Uber to/from park (~10-15m). Walk between stops A -> D inside park. Flexible self-paced day.
+
+START | #2b82d9 | Stanza Hotel (Roma Norte) | 10:00 AM Departure | Uber (~10-15 mins) | 19.4194,-99.1566
+A | #eb4d4b | Chapultepec Castle Entrance | ~15 Mins | Park Entrance & Land-Train Tram | 19.4215,-99.1795
+B | #f0932b | Castillo de Chapultepec | ~1.5 Hours | Historic Rooms & Panorama Views | 19.4204,-99.1819
+C | #f9ca24 | Lakes & Botanical Paths | ~45 Mins | Lago de Chapultepec & Audiorama | 19.4235,-99.1852
+LUNCH | #2ecc71 | Choose Your Lunch Hub | ~1 Hour | Options: Polanco / Park Side / Roma | 19.4312,-99.1925
+D | #22a6b3 | Anthropology Museum | ~1.5 to 2 Hours | Aztec & Maya Halls | 19.4260,-99.1863
+RETURN | #2b82d9 | Stanza Hotel (Roma Norte) | Late Afternoon | Uber Back to Hotel | 19.4194,-99.1566</textarea>
+    </div>
+
+    <div class="btn-row">
+      <button type="button" class="ai-btn" id="btnAi">1. AI Parse Messy Notes & Find Coords</button>
+      <button type="button" id="btnRender">2. Render Map & Card (Instant)</button>
+      <button type="button" class="export" id="btnExport">3. Export PNG</button>
+    </div>
+    <div id="status">Ready. Keys save automatically to your browser storage.</div>
+  </div>
+
+  <div class="preview-scroll">
+    <div id="capture-canvas">
+      <div class="left-col">
+        <div class="map-title" id="out-map-title">ROUTE MAP (CHAPULTEPEC & POLANCO)</div>
+        <div id="map-container"></div>
+      </div>
+
+      <div class="right-col">
+        <div class="card-header">
+          <h1 id="out-day-header">WEDNESDAY ITINERARY & KEY</h1>
+          <p id="out-sub-header">Oct 28, 2026 | Stanza Hotel -> Chapultepec Park</p>
+        </div>
+
+        <div class="stops-list" id="out-stops-list"></div>
+
+        <div class="transit-note" id="out-note">
+          Transit & Planning Note: Uber to/from park (~10-15m). Walk between stops A -> D inside park. Flexible self-paced day.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    function setStatus(msg) { statusEl.textContent = msg; }
+
+    // Auto-save/load API keys from browser's encrypted localStorage
+    const apiKeyInput = document.getElementById('apiKey');
+    apiKeyInput.value = localStorage.getItem('local_gemini_key') || '';
+    apiKeyInput.addEventListener('input', () => {
+      localStorage.setItem('local_gemini_key', apiKeyInput.value.trim());
+    });
+
+    const cartoKeyInput = document.getElementById('cartoKey');
+    cartoKeyInput.value = localStorage.getItem('local_carto_key') || '';
+    cartoKeyInput.addEventListener('input', () => {
+      localStorage.setItem('local_carto_key', cartoKeyInput.value.trim());
+      updateCartoLayer();
+    });
+
+    let map = null;
+    let currentTileLayer = null;
+    let mapLayerGroup = null;
+
+    function initMap() {
+      if (typeof L === 'undefined') {
+        setTimeout(initMap, 300);
+        return;
+      }
+      map = L.map('map-container', {
+        zoomControl: false,
+        attributionControl: false,
+        preferCanvas: true,
+        renderer: L.canvas()
+      }).setView([19.424, -99.175], 14);
+
+      mapLayerGroup = L.layerGroup().addTo(map);
+      updateCartoLayer();
+      setTimeout(() => { if(map) map.invalidateSize(); }, 200);
+      renderFromStructuredText();
+    }
+
+    function updateCartoLayer() {
+      if (!map) return;
+      const cartoKey = cartoKeyInput.value.trim();
+      const style = document.getElementById('cartoStyle').value;
+      if (currentTileLayer) map.removeLayer(currentTileLayer);
+
+      const keyParam = cartoKey ? `?key=${encodeURIComponent(cartoKey)}` : '';
+      const tileUrl = `https://{s}.basemaps.cartocdn.com/${style}/{z}/{x}/{y}{r}.png${keyParam}`;
+
+      currentTileLayer = L.tileLayer(tileUrl, {
+        subdomains: 'abcd',
+        maxZoom: 19,
+        crossOrigin: 'anonymous'
+      }).addTo(map);
+      map.invalidateSize();
+    }
+
+    async function fetchRouteGeometry(coordsList) {
+      if (coordsList.length < 2) return coordsList;
+      const coordString = coordsList.map(c => `${c[1]},${c[0]}`).join(';');
+      const url = `https://router.project-osrm.org/route/v1/driving/${coordString}?overview=full&geometries=geojson`;
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.routes && data.routes[0]) {
+          return data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+        }
+      } catch (e) {
+        console.warn('OSRM fallback', e);
+      }
+      return coordsList;
+    }
+
+    async function renderFromStructuredText() {
+      try {
+        setStatus('Rendering itinerary & auto-framing map...');
+        const text = document.getElementById('rawInput').value.trim();
+        const routeMode = document.getElementById('routeMode').value;
+
+        const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+        const stops = [];
+
+        for (const line of lines) {
+          if (line.startsWith('MAP_TITLE:')) {
+            document.getElementById('out-map-title').textContent = line.replace('MAP_TITLE:', '').trim();
+          } else if (line.startsWith('DAY_HEADER:')) {
+            document.getElementById('out-day-header').textContent = line.replace('DAY_HEADER:', '').trim();
+          } else if (line.startsWith('SUB_HEADER:')) {
+            document.getElementById('out-sub-header').textContent = line.replace('SUB_HEADER:', '').trim();
+          } else if (line.startsWith('NOTE:')) {
+            document.getElementById('out-note').textContent = line.replace('NOTE:', '').trim();
+          } else if (line.includes('|')) {
+            const parts = line.split('|').map(p => p.trim());
+            if (parts.length >= 5) {
+              const badge = parts[0];
+              const color = parts[1];
+              const title = parts[2];
+              const subtitle = parts.length >= 6 ? `${parts[3]} | ${parts[4]}` : parts[3];
+              const locPart = parts[parts.length - 1];
+              stops.push({ badge, color, title, subtitle, locPart });
+            }
+          }
+        }
+
+        const listEl = document.getElementById('out-stops-list');
+        listEl.innerHTML = '';
+        stops.forEach(s => {
+          const item = document.createElement('div');
+          item.className = 'stop-item';
+          item.innerHTML = `
+            <div class="badge" style="background-color: ${s.color}">${s.badge}</div>
+            <div class="stop-details">
+              <div class="stop-title">${s.title}</div>
+              <div class="stop-meta">${s.subtitle}</div>
+            </div>
+          `;
+          listEl.appendChild(item);
+        });
+
+        if (!map || !mapLayerGroup) return;
+
+        map.invalidateSize();
+        mapLayerGroup.clearLayers();
+        const validCoords = [];
+        const plottedStops = [];
+
+        for (let i = 0; i < stops.length; i++) {
+          const s = stops[i];
+          if (s.badge.toUpperCase() === 'RETURN' && i > 0 && s.locPart === stops[0].locPart) {
+            continue;
+          }
+
+          const latLonMatch = s.locPart.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+          if (latLonMatch) {
+            const coords = [parseFloat(latLonMatch[1]), parseFloat(latLonMatch[2])];
+            validCoords.push(coords);
+            plottedStops.push({ ...s, coords });
+          }
+        }
+
+        if (validCoords.length > 0) {
+          const routeLatLngs = await fetchRouteGeometry(validCoords);
+
+          if (routeMode === 'driving') {
+            L.polyline(routeLatLngs, { color: '#095266', weight: 10, opacity: 0.85 }).addTo(mapLayerGroup);
+            L.polyline(routeLatLngs, { color: '#1de0ff', weight: 6, opacity: 1 }).addTo(mapLayerGroup);
+          } else {
+            L.polyline(routeLatLngs, { color: '#095266', weight: 8, opacity: 0.7 }).addTo(mapLayerGroup);
+            L.polyline(routeLatLngs, {
+              color: '#6ec6ff',
+              weight: 5,
+              dashArray: '2, 12',
+              lineCap: 'round'
+            }).addTo(mapLayerGroup);
+          }
+
+          plottedStops.forEach(s => {
+            const isLetter = s.badge.length <= 2;
+            const label = isLetter ? s.badge : (s.badge === 'START' ? 'S' : 'L');
+            const bgColor = isLetter ? '#ffffff' : s.color;
+            const textColor = isLetter ? '#101926' : '#ffffff';
+
+            const icon = L.divIcon({
+              className: '',
+              html: `<div class="custom-pin" style="width:28px;height:28px;background:${bgColor};color:${textColor};border-color:${s.color};">${label}</div>`,
+              iconSize: [28, 28],
+              iconAnchor: [14, 14]
+            });
+
+            L.marker(s.coords, { icon }).addTo(mapLayerGroup);
+          });
+
+          const bounds = L.latLngBounds(validCoords);
+          map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+          
+          setStatus('Done! Map auto-framed to entire route. Ready to export PNG.');
+        } else {
+          setStatus('Card updated.');
+        }
+      } catch (err) {
+        setStatus('Render Error: ' + err.message);
+      }
+    }
+
+    async function parseWithGemini() {
+      const key = apiKeyInput.value.trim();
+      const cityBias = document.getElementById('cityBias').value.trim();
+      const rawText = document.getElementById('rawInput').value.trim();
+      const btn = document.getElementById('btnAi');
+
+      if (!key) {
+        setStatus('Please enter your Gemini API Key first.');
+        return;
+      }
+
+      btn.disabled = true;
+      setStatus('Calling Gemini 3.8 Flash to parse notes & look up coordinates...');
+
+      const prompt = `Convert the following itinerary notes for ${cityBias} into this exact line-by-line pipe-separated format.
+CRITICAL: The last column of every stop MUST be accurate decimal Latitude,Longitude coordinates (e.g. 19.4204,-99.1819) for that landmark in ${cityBias}. Do NOT wrap in markdown code blocks.
+
+MAP_TITLE: ROUTE MAP (NEIGHBORHOOD OR AREA)
+DAY_HEADER: DAY ITINERARY & KEY
+SUB_HEADER: Date | Start -> Area
+NOTE: Transit & Planning Note...
+
+START | #2b82d9 | Stop Name | Time/Duration | Short Activity Note | Lat,Lon
+A | #eb4d4b | Stop Name | Time/Duration | Short Activity Note | Lat,Lon
+B | #f0932b | Stop Name | Time/Duration | Short Activity Note | Lat,Lon
+
+Input notes:
+${rawText}`;
+
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${encodeURIComponent(key)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+
+        const data = await res.json();
+        if (data.error) {
+          setStatus('Gemini Error: ' + data.error.message);
+          btn.disabled = false;
+          return;
+        }
+
+        const output = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (output) {
+          document.getElementById('rawInput').value = output.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
+          setStatus('Parsed successfully! Refreshing map...');
+          await renderFromStructuredText();
+        } else {
+          setStatus('Unexpected Gemini response.');
+        }
+      } catch (err) {
+        setStatus('Network Error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function exportPNG() {
+      try {
+        setStatus('Generating PNG export...');
+        const el = document.getElementById('capture-canvas');
+        const canvas = await html2canvas(el, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: false,
+          backgroundColor: '#101926'
+        });
+        const link = document.createElement('a');
+        link.download = 'itinerary.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        setStatus('PNG downloaded!');
+      } catch (err) {
+        setStatus('Export Error: ' + err.message);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('btnAi').addEventListener('click', parseWithGemini);
+      document.getElementById('btnRender').addEventListener('click', renderFromStructuredText);
+      document.getElementById('btnExport').addEventListener('click', exportPNG);
+      document.getElementById('cartoStyle').addEventListener('change', updateCartoLayer);
+      document.getElementById('routeMode').addEventListener('change', renderFromStructuredText);
+
+      setTimeout(initMap, 100);
+    });
+  </script>
+</body>
+</html>
